@@ -1,11 +1,12 @@
 <launch>
     <!-- Get launch params-->
-    <arg name="sim" default="false" doc="true: activates simulation time, switches to simulation color settings and deactivates launching of an image provider" />
+    <arg name="sim" default="true" doc="true: activates simulation time, switches to simulation color settings and deactivates launching of an image provider" />
     <arg name="camera" default="true" doc="true: launches an image provider to get images from a camera (unless sim:=true)" />
     <arg name="basler" default="true" doc="true: launches the basler camera driver instead of the wolves image provider" />
     <arg name="dummyball" default="false" doc="true: does not start the ball detection to save resources" />
-    <arg name="debug" default="false" doc="true: activates publishing of several debug images" />
+    <arg name="debug" default="true" doc="true: activates publishing of several debug images" />
     <arg name="use_game_settings" default="false" doc="true: loads additional game settings" />
+    <arg name="yolo_darknet" default="true" />
 
     <arg if="$(optenv IS_ROBOT false)" name="taskset" default="taskset -c 6,7"/>
     <arg unless="$(optenv IS_ROBOT false)" name="taskset" default=""/>
@@ -22,7 +23,8 @@
         <param name="ball_fcnn_publish_debug_img" value="$(arg debug)" />
 
         <!-- Start vision without ball detection-->
-        <param name="neural_network_type" value="dummy" if="$(arg dummyball)"/>
+<!--         <param name="neural_network_type" value="dummy" if="$(arg dummyball)"/> -->
+        <param name="neural_network_type" value="yolo_darknet" if="$(arg yolo_darknet)"/>
 
         <!-- load special sim parameters-->
         <rosparam command="load" file="$(find bitbots_vision)/config/simparams.yaml" if="$(arg sim)"/>

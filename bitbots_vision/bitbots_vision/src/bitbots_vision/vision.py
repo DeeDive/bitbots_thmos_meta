@@ -319,20 +319,22 @@ class Vision:
         '''
         # Check if the yolo ball/goalpost detector is activated and if the non tpu version is used
         if config['neural_network_type'] in ['yolo_opencv', 'yolo_darknet']:
+            print("yolo judge")
             if ros_utils.config_param_change(self._config, config, ['yolo_darknet_model_path', 'neural_network_type']):
                 # Build absolute model path
-                yolo_darknet_model_path = os.path.join(self._package_path, 'models', config['yolo_darknet_model_path'])
+                self.yolo_darknet_model_path = os.path.join(self._package_path, 'models', config['yolo_darknet_model_path'])
+
                 # Check if it exists
-                if not os.path.exists(os.path.join(yolo_darknet_model_path, "yolo_weights.weights")):
+                if not os.path.exists(os.path.join(self.yolo_darknet_model_path, "yolo_weights.weights")):
                     rospy.logerr('The specified yolo darknet model file doesn\'t exist! Maybe its a fcnn model?', logger_name="vision_yolo")
                 else:
                     # Decide which yolo implementation should be used
                     if config['neural_network_type'] == 'yolo_opencv':
                         # Load OpenCV implementation (uses OpenCL)
-                        self._yolo = yolo_handler.YoloHandlerOpenCV(config, yolo_darknet_model_path)
+                        self._yolo = yolo_handler.YoloHandlerOpenCV(config, self.yolo_darknet_model_path)
                     elif config['neural_network_type'] == 'yolo_darknet':
                         # Load Darknet implementation (uses CUDA)
-                        self._yolo = yolo_handler.YoloHandlerDarknet(config, yolo_darknet_model_path)
+                        self._yolo = yolo_handler.YoloHandlerDarknet(config, self.yolo_darknet_model_path)
                     rospy.loginfo(config['neural_network_type'] + " vision is running now", logger_name="vision_yolo")
 
             # For other changes only modify the config
@@ -531,7 +533,12 @@ class Vision:
         ########
 
         # Get a number of top balls under the field boundary, which have an high enough rating
-        all_balls = self._ball_detector.get_top_candidates(count=self._max_balls)
+        all_balls = self._ball_detector.get_top_candidates() # count=self._max_balls
+        # print("this is ball")
+
+        #print(self._yolo)
+        #print(self.yolo_darknet_model_path)
+
         balls_under_field_boundary = \
             self._field_boundary_detector.candidates_under_convex_field_boundary(
                 all_balls,

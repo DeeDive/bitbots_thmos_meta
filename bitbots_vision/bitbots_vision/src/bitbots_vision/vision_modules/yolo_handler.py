@@ -3,9 +3,14 @@ import os
 import abc
 import rospy
 import numpy as np
+import PIL.Image as pl
 from math import exp
 from collections import defaultdict
 from .candidate import CandidateFinder, Candidate
+
+from .models111 import load_model
+from .mydetect import detect_image
+
 try:
     from pydarknet import Detector, Image
 except ImportError:
@@ -34,9 +39,12 @@ class YoloHandler:
         self._image = None
 
         # Load possible class names
-        namepath = os.path.join(model_path, "obj.names")
-        with open(namepath, "r") as fp:
+        self.namepath = os.path.join(model_path, "obj.names")
+
+        with open(self.namepath, "r") as fp:
             self._class_names = fp.read().splitlines()
+
+        #print(f"{self._class_names}11")
 
         # Set config
         self.set_config(config)
@@ -65,7 +73,7 @@ class YoloHandler:
         self._candidates = None
 
     @abc.abstractmethod
-    def predict(self):
+    def predict(self,classname):
         """
         Implemented version should run the neural metwork on the latest image. (Cached)
         """
@@ -78,8 +86,15 @@ class YoloHandler:
         :param class_name: The name of the class you want to query
         """
         assert class_name in self._class_names, f"Class '{class_name}' is not available for the current yolo model!"
-        self.predict()
-        return self._candidates[class_name]
+
+        self.predict(class_name)
+        # this point is correct
+        #print(f"classname is {class_name}")
+        #print(f"self.class_name is{self._class_names}")
+        #print(self.namepath)
+        #print(f"the candidate{self._candidates[class_name]}")
+
+        return self._candidates
 
     def get_classes(self):
         return self._class_names
@@ -107,7 +122,7 @@ class YoloHandlerDarknet(YoloHandler):
         self._config = config
 
         # Setup detector
-        self._net = Detector(bytes(configpath, encoding="utf-8"), bytes(weightpath, encoding="utf-8"), 0.5, bytes(datapath, encoding="utf-8"))
+        self.model = load_model(configpath, weightpath)
         super().__init__(config, model_path)
 
     def _generate_dummy_obj_data_file(self, obj_name_path):
@@ -123,33 +138,42 @@ class YoloHandlerDarknet(YoloHandler):
         with open('/tmp/obj.data', 'w') as f:
             f.write(obj_data)
 
-    def predict(self):
+    def predict(self, classname):
         """
         Runs the neural network
         """
         # Check if cached
-        if self._candidates is None or not self._caching:
+        '''if self._candidates is None or not self._caching:'''
+        if True:
             # Run neural network
-            results = self._net.detect(Image(self._image))
-            # Init lists
-            self._candidates = defaultdict(list)
+            results = detect_image(self.model, self._image, img_size=416, conf_thres=0.5, nms_thres=0.5)
+            self._candidates=[]
+            '''
+            print("model is runned")
+            print(self._class_names)
+            print(classname)
+            '''
             # Go through results
             for out in results:
                 # Get class id
-                class_id = out[0]
+                class_id = int(out[5])
+                if self._class_names[class_id]!=classname:
+                    continue
                 # Get confidence
-                confidence = out[1]
+                confidence = out[4]
                 if confidence > self._confidence_threshold:
                     # Get candidate position and size
-                    x, y, w, h = out[2]
-                    x = x - int(w // 2)
-                    y = y - int(h // 2)
+                    x1 = out[0]
+                    y1 = out[1]
+                    x2 = out[2]
+                    y2 = out[3]
+                    w = x2-x1
+                    h = y2-y1
                     # Create candidate
-                    c = Candidate(int(x), int(y), int(w), int(h), confidence)
+                    c = Candidate(int(x1), int(y1), int(w), int(h), confidence)
                     # Append candidate to the right list depending on the class
-                    assert class_id.decode() in self._class_names, \
-                        f"Predicted class {class_id.decode()} not in {self._class_names}."
-                    self._candidates[class_id.decode()].append(c)
+                    self._candidates.append(c)
+                    # print(f"{self._class_names[class_id]} is {classname}")
 
 class YoloHandlerOpenCV(YoloHandler):
     """
@@ -181,7 +205,7 @@ class YoloHandlerOpenCV(YoloHandler):
 
         return output_layers
 
-    def predict(self):
+    def predict(self,classname):
         """
         Runs the neural network
         """
@@ -401,7 +425,7 @@ class YoloHandlerNCS2(YoloHandler):
                     objects.append([list_of_coordinates, float(confidence), j])
         return objects
 
-    def predict(self):
+    def predict(self,classname):
         if self._candidates is None or not self._caching:
             # Set up variables
             self._candidates = defaultdict(list)

@@ -25,6 +25,11 @@ class Candidate:
         self._height = height
         self._rating = rating
 
+    def get_x(self):
+        return self._x1
+
+    def get_y(self):
+        return self._y1
     def get_width(self):
         # type: () -> int
         """
